@@ -1,3 +1,4 @@
+
 import * as db from '../db';
 import { calcularPrecio } from '../catalogo';
 import type { DatosProducto, Producto, ProductoConPrecio } from '../tipos';
@@ -18,49 +19,81 @@ type Id = number | string;
 /**
  * Servicio de catálogo.
  *
- * -----------------------------------------------------------------------------
- * FALLA — Inyección SQL (OWASP A03:2021)
- * -----------------------------------------------------------------------------
- * Los filtros del catálogo (tipo, variedad, búsqueda) se concatenan en el
- * texto SQL. Un valor con comillas rompe la consulta y permite modificar su
- * lógica: ampliar el conjunto de resultados, leer otras tablas mediante UNION
- * o incluso borrar datos.
+ * Corrección de SQL Injection (OWASP A03:2021).
  *
- * Corrección: consultas parametrizadas con $1, $2, ... y listas blancas
- * (validar que `tipo` sea uno de los valores conocidos antes de usarlo).
- * -----------------------------------------------------------------------------
+ * Se utilizan consultas parametrizadas para evitar
+ * que los datos ingresados por el usuario puedan
+ * modificar la estructura de una consulta SQL.
  */
 
 /** Lista productos aplicando los filtros del menú. */
-export async function listar(filtros: FiltrosCatalogo = {}): Promise<ProductoConPrecio[]> {
+export async function listar(
+  filtros: FiltrosCatalogo = {}
+): Promise<ProductoConPrecio[]> {
+
   const { tipo, variedad, q } = filtros;
 
-  // FALLA: concatenación directa de entrada de usuario en la consulta.
   let sql = 'SELECT * FROM productos WHERE activo = true';
-  if (tipo) sql += ` AND tipo = '${tipo}'`;
-  if (variedad) sql += ` AND variedad = '${variedad}'`;
-  if (q) {
-    sql += ` AND (nombre ILIKE '%${q}%' OR descripcion ILIKE '%${q}%')`;
+
+  // Arreglo donde guardamos los parámetros de la consulta.
+  const valores: string[] = [];
+
+  // Filtro por tipo de producto.
+  if (tipo) {
+    valores.push(tipo);
+    sql += ` AND tipo = $${valores.length}`;
   }
+
+  // Filtro por variedad u origen.
+  if (variedad) {
+    valores.push(variedad);
+    sql += ` AND variedad = $${valores.length}`;
+  }
+
+  // Filtro por búsqueda de nombre o descripción.
+  if (q) {
+    valores.push(`%${q}%`);
+    sql += ` AND (nombre ILIKE $${valores.length}
+              OR descripcion ILIKE $${valores.length})`;
+  }
+
   sql += ' ORDER BY tipo, variedad NULLS FIRST, id';
 
-  const { rows } = await db.query<Producto>(sql);
+  const { rows } = await db.query<Producto>(sql, valores);
 
-  return rows.map((p) => ({ ...p, precio: calcularPrecio(p) }));
+  return rows.map((p) => ({
+    ...p,
+    precio: calcularPrecio(p)
+  }));
 }
 
 /** Obtiene un producto por id. */
-export async function obtener(id: Id): Promise<ProductoConPrecio | null> {
-  // FALLA: inyección SQL en el id.
-  const { rows } = await db.query<Producto>(`SELECT * FROM productos WHERE id = '${id}'`);
+export async function obtener(
+  id: Id
+): Promise<ProductoConPrecio | null> {
+
+  const { rows } = await db.query<Producto>(
+    'SELECT * FROM productos WHERE id = $1',
+    [id]
+  );
+
   if (!rows[0]) return null;
-  return { ...rows[0], precio: calcularPrecio(rows[0]) };
+
+  return {
+    ...rows[0],
+    precio: calcularPrecio(rows[0])
+  };
 }
 
 /** Crea un producto nuevo. */
-export async function crear(datos: DatosProductoEntrada): Promise<Producto> {
+export async function crear(
+  datos: DatosProductoEntrada
+): Promise<Producto> {
+
   const { rows } = await db.query<Producto>(
-    `INSERT INTO productos (nombre, tipo, variedad, tamano, gramos, precio_base, precio_por_gramo, descripcion)
+    `INSERT INTO productos
+      (nombre, tipo, variedad, tamano, gramos,
+       precio_base, precio_por_gramo, descripcion)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
     [
@@ -74,15 +107,27 @@ export async function crear(datos: DatosProductoEntrada): Promise<Producto> {
       datos.descripcion || '',
     ]
   );
+
   return rows[0];
 }
 
 /** Actualiza un producto. */
-export async function actualizar(id: Id, datos: DatosProductoEntrada): Promise<Producto | null> {
+export async function actualizar(
+  id: Id,
+  datos: DatosProductoEntrada
+): Promise<Producto | null> {
+
   const { rows } = await db.query<Producto>(
     `UPDATE productos
-        SET nombre = $1, tipo = $2, variedad = $3, tamano = $4, gramos = $5,
-            precio_base = $6, precio_por_gramo = $7, descripcion = $8, activo = $9
+        SET nombre = $1,
+            tipo = $2,
+            variedad = $3,
+            tamano = $4,
+            gramos = $5,
+            precio_base = $6,
+            precio_por_gramo = $7,
+            descripcion = $8,
+            activo = $9
       WHERE id = $10
       RETURNING *`,
     [
@@ -98,22 +143,29 @@ export async function actualizar(id: Id, datos: DatosProductoEntrada): Promise<P
       id,
     ]
   );
+
   return rows[0] || null;
 }
 
 /** Elimina (desactiva) un producto. */
-export async function eliminar(id: Id): Promise<Producto | null> {
+export async function eliminar(
+  id: Id
+): Promise<Producto | null> {
+
   const { rows } = await db.query<Producto>(
     'UPDATE productos SET activo = false WHERE id = $1 RETURNING *',
     [id]
   );
+
   return rows[0] || null;
 }
 
 /** Lista las variedades disponibles en el catálogo. */
 export async function variedades(): Promise<string[]> {
+
   const { rows } = await db.query<{ variedad: string }>(
-    "SELECT DISTINCT variedad FROM productos WHERE variedad IS NOT NULL ORDER BY variedad"
+    'SELECT DISTINCT variedad FROM productos WHERE variedad IS NOT NULL ORDER BY variedad'
   );
+
   return rows.map((r) => r.variedad);
 }
