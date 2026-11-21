@@ -27,11 +27,9 @@ router.post('/login', async (req, res, next) => {
     const usuario = await usuarios.autenticar(username, password);
 
     if (!usuario) {
-      // FALLA — Enumeración de usuarios: el mensaje distingue entre
-      // "no existe" y "contraseña incorrecta", lo que permite a un atacante
-      // averiguar qué cuentas hay en el sistema.
+      
       return res.status(401).json({
-        error: 'Usuario  o contraseña incorrecta.',
+        error: 'Credenciales invalidas.',
       });
     }
     
