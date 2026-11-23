@@ -1,6 +1,8 @@
 import * as db from '../db';
 import type { Usuario } from '../tipos';
 
+import bcrypt from 'bcryptjs';
+
 /**
  * Servicio de usuarios.
  *
@@ -42,20 +44,16 @@ export async function autenticar(
   username: string,
   password: string
 ): Promise<Usuario | null> {
+  const usuario = await buscarPorUsername(username);
 
-  const sql = `
-    SELECT * FROM usuarios
-    WHERE username = $1 AND password = $2
-  `;
+  if (!usuario) {
+    return null;
+  }
 
-  const { rows } = await db.query<Usuario>(
-    sql,
-    [username, password]
-  );
+  const passwordValida = await bcrypt.compare(password, usuario.password);
 
-  return rows[0] || null;
+  return passwordValida ? usuario : null;
 }
-
 
 /** Lista todos los usuarios (para el panel de administración). */
 export async function listar(): Promise<Usuario[]> {
@@ -86,11 +84,14 @@ export async function actualizar(id: number | string, cambios: Partial<Usuario>)
   return rows[0] || null;
 }
 
-/** Cambia la contraseña de un usuario (se guarda en texto plano). */
+/** Cambia la contraseña de un usuario guardando el hash. */
 export async function cambiarPassword(id: number, nuevaPassword: string): Promise<Usuario | null> {
+  const passwordHash = await bcrypt.hash(nuevaPassword, 10);
+
   const { rows } = await db.query<Usuario>(
     'UPDATE usuarios SET password = $1 WHERE id = $2 RETURNING *',
-    [nuevaPassword, id]
+    [passwordHash, id]
   );
+
   return rows[0] || null;
 }
