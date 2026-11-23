@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 
+import { randomBytes } from 'crypto';
+
 import config from '../config';
 import * as catalogo from '../services/catalogo.service';
 import * as usuarios from '../services/usuarios.service';
@@ -177,30 +179,90 @@ router.post('/probar-conexion', (req, res) => {
  * y guardar fuera del árbol web.
  * -----------------------------------------------------------------------------
  */
+/**
+ * POST /api/admin/subir-archivo
+ * Sube imágenes PNG o JPG de forma segura.
+ */
 router.post('/subir-archivo', express.json({ limit: '8mb' }), (req, res, next) => {
   try {
     const { nombre, contenidoBase64 } = req.body || {};
 
-    if (!nombre || !contenidoBase64) {
+    if (
+      typeof nombre !== 'string' ||
+      typeof contenidoBase64 !== 'string' ||
+      !nombre ||
+      !contenidoBase64
+    ) {
       return res.status(400).json({ error: 'Falta el archivo.' });
     }
 
-    // FALLA: sin validación de extensión, MIME ni tamaño.
-    const buffer = Buffer.from(contenidoBase64, 'base64');
-    fs.mkdirSync(config.uploadsDir, { recursive: true });
+    // Solo se permiten extensiones PNG y JPG.
+    const extension = path.extname(nombre).toLowerCase();
 
-    // FALLA: nombre tomado del cliente sin sanear (path traversal).
-    const destino = path.join(config.uploadsDir, nombre);
-    fs.writeFileSync(destino, buffer);
+    if (!['.png', '.jpg', '.jpeg'].includes(extension)) {
+      return res.status(400).json({ error: 'Formato de archivo no permitido.' });
+    }
+
+    // Se comprueba que el contenido sea Base64 válido.
+    const base64Limpio = contenidoBase64.replace(/^data:image\/\w+;base64,/, '');
+
+    if (
+      base64Limpio.length === 0 ||
+      base64Limpio.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(base64Limpio)
+    ) {
+      return res.status(400).json({ error: 'Contenido del archivo inválido.' });
+    }
+
+    const buffer = Buffer.from(base64Limpio, 'base64');
+
+    // Tamaño máximo: 5 MB.
+    if (buffer.length === 0 || buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'El archivo supera el tamaño permitido.' });
+    }
+
+    // Se verifica la firma real del archivo.
+    const esPng =
+      buffer.length >= 8 &&
+      buffer.subarray(0, 8).equals(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      );
+
+    const esJpg =
+      buffer.length >= 3 &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[2] === 0xff;
+
+    if (
+      (extension === '.png' && !esPng) ||
+      ((extension === '.jpg' || extension === '.jpeg') && !esJpg)
+    ) {
+      return res.status(400).json({ error: 'El contenido no coincide con el formato declarado.' });
+    }
+
+    // Se genera un nombre aleatorio, sin usar el nombre del cliente.
+    const nombreSeguro = `${randomBytes(16).toString('hex')}${extension}`;
+    const destino = path.join(config.uploadsDir, nombreSeguro);
+
+    fs.mkdirSync(config.uploadsDir, { recursive: true });
+    fs.writeFileSync(destino, buffer, { flag: 'wx' });
 
     res.json({
       mensaje: 'Archivo subido.',
-      url: `/uploads/${nombre}`,
+      url: `/uploads/${nombreSeguro}`,
       bytes: buffer.length,
     });
   } catch (err) {
     next(err);
   }
 });
+
+
+
+
+
+
+
 
 export default router;
