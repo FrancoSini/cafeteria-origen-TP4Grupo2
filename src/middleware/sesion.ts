@@ -25,6 +25,8 @@
 import type { Request, Response } from 'express';
 
 import type { Sesion, UsuarioSesion } from '../tipos';
+import { randomBytes } from 'crypto';
+
 
 export const sesiones = new Map<string, Sesion>();
 let contadorSesiones = 0;
@@ -48,21 +50,29 @@ export function leerCookies(req: Request): Record<string, string> {
 export function crearSesion(req: Request, res: Response, usuario: UsuarioSesion): string {
   contadorSesiones += 1;
 
-  // FALLA: identificador predecible.
   const id = `sesion_${contadorSesiones}`;
+  const csrfToken = randomBytes(32).toString('hex');
 
-  // FALLA: la sesión nunca expira.
   sesiones.set(id, {
     usuario,
     creadaEn: Date.now(),
     expiraEn: null,
+    csrfToken,
   });
 
-  // FALLA: cookie sin httpOnly / secure / sameSite.
-  res.cookie('sid', id, { path: '/' });
+  res.cookie('sid', id, {
+    path: '/',
+    sameSite: 'lax',
+  });
+
+  res.cookie('csrf', csrfToken, {
+    path: '/',
+    sameSite: 'lax',
+  });
 
   return id;
 }
+
 
 /** Devuelve la sesión de la petición, si existe. */
 export function obtenerSesion(req: Request): Sesion | null {
@@ -77,4 +87,37 @@ export function destruirSesion(req: Request): void {
   const cookies = leerCookies(req);
   const id = cookies.sid;
   if (id) sesiones.delete(id);
+}
+
+
+
+export function verificarCsrf(req: Request, res: Response, next: (err?: unknown) => void): void {
+  const metodo = req.method.toUpperCase();
+
+  if (['GET', 'HEAD', 'OPTIONS'].includes(metodo)) {
+    return next();
+  }
+
+  const cookies = leerCookies(req);
+  const sesion = obtenerSesion(req);
+
+  // Si no hay sesión, no hay cookie de autenticación que proteger.
+  if (!sesion) {
+    return next();
+  }
+
+  const tokenCookie = cookies.csrf;
+  const tokenEnviado = req.headers['x-csrf-token'] || req.body?._csrf;
+
+  if (
+    !tokenCookie ||
+    !tokenEnviado ||
+    tokenCookie !== sesion.csrfToken ||
+    tokenEnviado !== sesion.csrfToken
+  ) {
+    res.status(403).json({ error: 'Token CSRF inválido o ausente.' });
+    return;
+  }
+
+  next();
 }

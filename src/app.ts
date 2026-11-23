@@ -11,6 +11,8 @@ import comentariosRoutes from './routes/comentarios.routes';
 import adminRoutes from './routes/admin.routes';
 import debugRoutes from './routes/debug.routes';
 
+import { verificarCsrf } from './middleware/sesion';
+
 const app = express();
 
 /**
@@ -25,6 +27,8 @@ const app = express();
  */
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.use(verificarCsrf);
 
 // Archivos subidos por el panel de administración.
 app.use('/uploads', express.static(config.uploadsDir));

@@ -74,4 +74,17 @@ router.get('/yo', (req, res) => {
   res.json({ usuario: sesion.usuario });
 });
 
+
+
+
+router.get('/csrf-token', (req, res) => {
+  const sesion = obtenerSesion(req);
+
+  if (!sesion) {
+    return res.status(401).json({ error: 'Necesitás iniciar sesión.' });
+  }
+
+  res.json({ token: sesion.csrfToken });
+});
+
 export default router;
