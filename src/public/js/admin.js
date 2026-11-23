@@ -20,11 +20,8 @@
     return String(valor == null ? '' : valor);
   }
 
-  function escaparHtml(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto == null ? '' : String(texto);
-    return div.innerHTML;
-  }
+  //FUNCION borrada 
+
 
   function api(url, opciones) {
     return fetch(API + url, opciones).then(function (res) {
@@ -60,7 +57,7 @@
 
   function feedback(el, mensaje, ok) {
     el.className = 'form-feedback ' + (ok ? 'is-ok' : 'is-error');
-    el.innerHTML = mensaje;
+    el.textContent = mensaje;
   }
 
   /* ------------------------------------------------------------------ login */
@@ -75,7 +72,7 @@
     }).then(function (resp) {
       if (!resp.ok) {
         // FALLA (XSS reflejado): el mensaje del servidor (que incluye el
-        // usuario enviado) se pinta con innerHTML.
+        // usuario enviado) se pinta con HTML din�mico.
         feedback(caja, 'No pudimos iniciar sesión: ' + (resp.data.error || 'error desconocido'), false);
         return;
       }
@@ -89,16 +86,19 @@
       usuario = null;
       $('#vista-login').hidden = false;
       $('#vista-panel').hidden = true;
-      $('#admin-user').innerHTML = '';
+      $('#admin-user').textContent = '';
     });
   }
 
   function mostrarPanel() {
     $('#vista-login').hidden = true;
     $('#vista-panel').hidden = false;
-    $('#admin-user').innerHTML =
-      'Sesión de <strong>' + raw(usuario.nombre) + '</strong> · rol: <strong>' + raw(usuario.rol) + '</strong>';
-    $('#panel-bienvenida').textContent = 'Hola, ' + usuario.nombre;
+
+    $('#admin-user').textContent =
+  'Sesión de ' + usuario.nombre + ' · rol: ' + usuario.rol;
+
+      $('#panel-bienvenida').textContent = 'Hola, ' + usuario.nombre;
+
     cargarTodo();
   }
 
@@ -130,51 +130,119 @@
                 .join(' · ') || '—',
             },
           ];
+          var contenedor = $('#kpis');
+          contenedor.textContent = '';
 
-          $('#kpis').innerHTML = kpis.map(function (k) {
-            return '<div class="kpi"><div class="kpi-label">' + raw(k.label) + '</div>' +
-              '<div class="kpi-value">' + raw(k.value) + '</div></div>';
-          }).join('');
+          kpis.forEach(function (k) {
+              var tarjeta = document.createElement('div');
+              tarjeta.className = 'kpi';
+
+              var etiqueta = document.createElement('div');
+                etiqueta.className = 'kpi-label';
+                etiqueta.textContent = k.label;
+
+                var valor = document.createElement('div');
+                valor.className = 'kpi-value';
+                valor.textContent = k.value;
+
+                tarjeta.appendChild(etiqueta);
+                tarjeta.appendChild(valor);
+                contenedor.appendChild(tarjeta);
+                });
+
         });
       });
     });
   }
 
-  /* --------------------------------------------------------------- pedidos */
-  function tablaPedidos(filas, conAcciones) {
-    if (!filas || filas.length === 0) return '<p class="empty">No hay pedidos.</p>';
 
-    var html = '<thead><tr><th>#</th><th>Mesa</th><th>Cliente</th><th>Estado</th>' +
-      '<th class="num">Total</th><th>Fecha</th>' + (conAcciones ? '<th>Acciones</th>' : '') + '</tr></thead><tbody>';
+function tablaPedidos(filas, conAcciones) {
+  var tabla = document.createElement('table');
 
-    filas.forEach(function (p) {
-      html += '<tr>' +
-        '<td>' + raw(p.id) + '</td>' +
-        '<td>' + raw(p.mesa) + '</td>' +
-        '<td>' + raw(p.cliente) + '</td>' +
-        '<td><span class="badge badge-' + raw(p.estado) + '">' + raw(p.estado) + '</span></td>' +
-        '<td class="num">' + money(p.total) + '</td>' +
-        '<td>' + new Date(p.creado_en).toLocaleString('es-AR') + '</td>' +
-        (conAcciones
-          ? '<td><select data-pedido="' + raw(p.id) + '" class="sel-estado">' +
-            ['abierto', 'preparando', 'listo', 'entregado'].map(function (e) {
-              return '<option value="' + e + '"' + (e === p.estado ? ' selected' : '') + '>' + e + '</option>';
-            }).join('') +
-            '</select></td>'
-          : '') +
-        '</tr>';
+  if (!filas || filas.length === 0) {
+    var mensaje = document.createElement('p');
+    mensaje.className = 'empty';
+    mensaje.textContent = 'No hay pedidos.';
+    tabla.appendChild(mensaje);
+    return tabla;
+  }
+
+  var thead = document.createElement('thead');
+  var encabezado = document.createElement('tr');
+
+  ['#', 'Mesa', 'Cliente', 'Estado', 'Total', 'Fecha'].forEach(function (texto) {
+    var th = document.createElement('th');
+    th.textContent = texto;
+    encabezado.appendChild(th);
+  });
+
+  if (conAcciones) {
+    var thAcciones = document.createElement('th');
+    thAcciones.textContent = 'Acciones';
+    encabezado.appendChild(thAcciones);
+  }
+
+  thead.appendChild(encabezado);
+  tabla.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+
+  filas.forEach(function (p) {
+    var fila = document.createElement('tr');
+
+    [p.id, p.mesa, p.cliente, p.estado, money(p.total),
+      new Date(p.creado_en).toLocaleString('es-AR')].forEach(function (dato) {
+      var td = document.createElement('td');
+      td.textContent = dato == null ? '' : String(dato);
+      fila.appendChild(td);
     });
 
-    return html + '</tbody>';
-  }
+    var celdaEstado = fila.children[3];
+    var insignia = document.createElement('span');
+    insignia.className = 'badge badge-' + String(p.estado);
+    insignia.textContent = p.estado;
+    celdaEstado.textContent = '';
+    celdaEstado.appendChild(insignia);
+
+    if (conAcciones) {
+      var tdAcciones = document.createElement('td');
+      var select = document.createElement('select');
+      select.dataset.pedido = String(p.id);
+      select.className = 'sel-estado';
+
+      ['abierto', 'preparando', 'listo', 'entregado'].forEach(function (estado) {
+        var opcion = document.createElement('option');
+        opcion.value = estado;
+        opcion.textContent = estado;
+        opcion.selected = estado === p.estado;
+        select.appendChild(opcion);
+      });
+
+      tdAcciones.appendChild(select);
+      fila.appendChild(tdAcciones);
+    }
+
+    tbody.appendChild(fila);
+  });
+
+  tabla.appendChild(tbody);
+  return tabla;
+}
+  
 
   function cargarPedidos() {
-    api('/pedidos').then(function (resp) {
-      var pedidos = resp.data.pedidos || [];
-      $('#tabla-pedidos').innerHTML = tablaPedidos(pedidos, true);
-      $('#tabla-ultimos').innerHTML = tablaPedidos(pedidos.slice(0, 5), false);
-    });
-  }
+  api('/pedidos').then(function (resp) {
+    var pedidos = resp.data.pedidos || [];
+
+    $('#tabla-pedidos').replaceChildren(
+      tablaPedidos(pedidos, true)
+    );
+
+    $('#tabla-ultimos').replaceChildren(
+      tablaPedidos(pedidos.slice(0, 5), false)
+    );
+  });
+}
 
   function cambiarEstado(evento) {
     var select = evento.target.closest('.sel-estado');
@@ -189,28 +257,53 @@
   }
 
   /* ------------------------------------------------------------- productos */
-  function cargarProductos() {
-    api('/productos').then(function (resp) {
-      var productos = resp.data.productos || [];
-      productosCache = {};
-      var html = '<thead><tr><th>#</th><th>Nombre</th><th>Tipo</th><th>Origen</th>' +
-        '<th class="num">Precio</th><th>Acciones</th></tr></thead><tbody>';
+    function cargarProductos() {
+  api('/productos').then(function (resp) {
+    var productos = resp.data.productos || [];
+    productosCache = {};
 
-      productos.forEach(function (p) {
-        productosCache[p.id] = p;
-        html += '<tr>' +
-          '<td>' + raw(p.id) + '</td>' +
-          '<td>' + raw(p.nombre) + '</td>' +
-          '<td>' + raw(p.tipo) + '</td>' +
-          '<td>' + raw(p.variedad || '—') + '</td>' +
-          '<td class="num">' + money(p.precio) + '</td>' +
-          '<td><button class="link-danger" data-borrar="' + raw(p.id) + '">Borrar</button></td>' +
-          '</tr>';
+    var tabla = $('#tabla-productos');
+    tabla.textContent = '';
+
+    var thead = document.createElement('thead');
+    var encabezado = document.createElement('tr');
+
+    ['#', 'Nombre', 'Tipo', 'Origen', 'Precio', 'Acciones'].forEach(function (texto) {
+      var th = document.createElement('th');
+      th.textContent = texto;
+      encabezado.appendChild(th);
+    });
+
+    thead.appendChild(encabezado);
+    tabla.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+
+    productos.forEach(function (p) {
+      productosCache[p.id] = p;
+
+      var fila = document.createElement('tr');
+
+      [p.id, p.nombre, p.tipo, p.variedad || '—', money(p.precio)].forEach(function (dato) {
+        var td = document.createElement('td');
+        td.textContent = dato == null ? '' : String(dato);
+        fila.appendChild(td);
       });
 
-      $('#tabla-productos').innerHTML = html + '</tbody>';
+      var acciones = document.createElement('td');
+      var boton = document.createElement('button');
+      boton.className = 'link-danger';
+      boton.dataset.borrar = String(p.id);
+      boton.textContent = 'Borrar';
+
+      acciones.appendChild(boton);
+      fila.appendChild(acciones);
+      tbody.appendChild(fila);
     });
-  }
+
+    tabla.appendChild(tbody);
+  });
+}
 
   function guardarProducto(evento) {
     evento.preventDefault();
@@ -301,58 +394,147 @@
             { label: 'Ticket promedio', value: money(t.data.promedio) },
             { label: 'Más vendido', value: mas ? raw(mas.nombre) + ' (' + raw(mas.unidades) + ')' : '—' },
           ];
-          $('#kpis-reportes').innerHTML = kpis.map(function (k) {
-            return '<div class="kpi"><div class="kpi-label">' + raw(k.label) + '</div>' +
-              '<div class="kpi-value">' + raw(k.value) + '</div></div>';
-          }).join('');
+          var contenedor = $('#kpis-reportes');
+            contenedor.textContent = '';
+
+            kpis.forEach(function (k) {
+              var tarjeta = document.createElement('div');
+              tarjeta.className = 'kpi';
+
+              var etiqueta = document.createElement('div');
+              etiqueta.className = 'kpi-label';
+              etiqueta.textContent = k.label;
+
+              var valor = document.createElement('div');
+              valor.className = 'kpi-value';
+              valor.textContent = k.value;
+
+              tarjeta.appendChild(etiqueta);
+              tarjeta.appendChild(valor);
+              contenedor.appendChild(tarjeta);
+            });
+                      
         });
       });
     });
   }
 
   function consultarVentas() {
-    var caja = $('#reporte-feedback');
-    var variedad = $('#reporte-variedad').value;
+  var caja = $('#reporte-feedback');
+  var variedad = $('#reporte-variedad').value;
+  var tabla = $('#tabla-ventas');
 
-    api('/reportes/ventas-por-variedad?variedad=' + encodeURIComponent(variedad)).then(function (resp) {
-      if (!resp.ok) {
-        feedback(caja, 'Error: ' + (resp.data.error || 'desconocido'), false);
-        $('#tabla-ventas').innerHTML = '';
-        return;
+  api('/reportes/ventas-por-variedad?variedad=' + encodeURIComponent(variedad)).then(function (resp) {
+    tabla.replaceChildren();
+
+    if (!resp.ok) {
+      feedback(caja, 'Error: ' + (resp.data.error || 'desconocido'), false);
+      return;
+    }
+
+    var ventas = resp.data.ventas || [];
+
+    var thead = document.createElement('thead');
+    var filaEncabezado = document.createElement('tr');
+
+    ['Origen', 'Producto', 'Unidades', 'Total'].forEach(function (titulo, i) {
+      var th = document.createElement('th');
+      th.textContent = titulo;
+
+      if (i >= 2) {
+        th.className = 'num';
       }
-      var ventas = resp.data.ventas || [];
-      var html = '<thead><tr><th>Origen</th><th>Producto</th><th class="num">Unidades</th>' +
-        '<th class="num">Total</th></tr></thead><tbody>';
-      ventas.forEach(function (v) {
-        html += '<tr><td>' + raw(v.variedad) + '</td><td>' + raw(v.nombre) + '</td>' +
-          '<td class="num">' + raw(v.unidades) + '</td><td class="num">' + money(v.total) + '</td></tr>';
-      });
-      $('#tabla-ventas').innerHTML = html + '</tbody>';
-      feedback(caja, 'Consulta realizada.', true);
+
+      filaEncabezado.appendChild(th);
     });
-  }
+
+    thead.appendChild(filaEncabezado);
+
+    var tbody = document.createElement('tbody');
+
+    ventas.forEach(function (v) {
+      var fila = document.createElement('tr');
+
+      [v.variedad, v.nombre, v.unidades, money(v.total)].forEach(function (dato, i) {
+        var td = document.createElement('td');
+        td.textContent = dato;
+
+        if (i >= 2) {
+          td.className = 'num';
+        }
+
+        fila.appendChild(td);
+      });
+
+      tbody.appendChild(fila);
+    });
+
+    tabla.appendChild(thead);
+    tabla.appendChild(tbody);
+
+    feedback(caja, 'Consulta realizada.', true);
+  });
+}
 
   /* -------------------------------------------------------------- usuarios */
   function cargarUsuarios() {
-    api('/admin/usuarios').then(function (resp) {
-      var usuarios = resp.data.usuarios || [];
-      var html = '<thead><tr><th>#</th><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Acciones</th></tr></thead><tbody>';
-      usuarios.forEach(function (u) {
-        html += '<tr>' +
-          '<td>' + raw(u.id) + '</td>' +
-          '<td>' + raw(u.username) + '</td>' +
-          '<td>' + raw(u.nombre) + '</td>' +
-          '<td><span class="badge' + (u.rol === 'admin' ? ' badge-admin' : '') + '">' + raw(u.rol) + '</span></td>' +
-          '<td><select data-usuario="' + raw(u.id) + '" class="sel-rol">' +
-            ['cliente', 'mozo', 'barista', 'admin'].map(function (r) {
-              return '<option value="' + r + '"' + (r === u.rol ? ' selected' : '') + '>' + r + '</option>';
-            }).join('') +
-            '</select></td>' +
-          '</tr>';
-      });
-      $('#tabla-usuarios').innerHTML = html + '</tbody>';
+  api('/admin/usuarios').then(function (resp) {
+    var usuarios = resp.data.usuarios || [];
+    var tabla = $('#tabla-usuarios');
+
+    tabla.replaceChildren();
+
+    var thead = document.createElement('thead');
+    var filaEncabezado = document.createElement('tr');
+
+    ['#', 'Usuario', 'Nombre', 'Rol', 'Acciones'].forEach(function (titulo) {
+      var th = document.createElement('th');
+      th.textContent = titulo;
+      filaEncabezado.appendChild(th);
     });
-  }
+
+    thead.appendChild(filaEncabezado);
+
+    var tbody = document.createElement('tbody');
+
+    usuarios.forEach(function (u) {
+      var fila = document.createElement('tr');
+
+      [u.id, u.username, u.nombre].forEach(function (dato) {
+        var td = document.createElement('td');
+        td.textContent = dato;
+        fila.appendChild(td);
+      });
+
+      var tdRol = document.createElement('td');
+      var badge = document.createElement('span');
+      badge.className = 'badge' + (u.rol === 'admin' ? ' badge-admin' : '');
+      badge.textContent = u.rol;
+      tdRol.appendChild(badge);
+      fila.appendChild(tdRol);
+
+      var tdAcciones = document.createElement('td');
+      var select = document.createElement('select');
+      select.dataset.usuario = String(u.id);
+      select.className = 'sel-rol';
+
+      ['cliente', 'mozo', 'barista', 'admin'].forEach(function (rol) {
+        var opcion = document.createElement('option');
+        opcion.value = rol;
+        opcion.textContent = rol;
+        opcion.selected = rol === u.rol;
+        select.appendChild(opcion);
+      });
+
+      tdAcciones.appendChild(select);
+      fila.appendChild(tdAcciones);
+      tbody.appendChild(fila);
+    });
+
+    tabla.appendChild(thead);
+    tabla.appendChild(tbody);
+  });
+}
 
   function cambiarRol(evento) {
     var select = evento.target.closest('.sel-rol');
@@ -419,12 +601,12 @@
   /* ------------------------------------------------------------------ init */
   function init() {
     // FALLA (XSS de DOM): se lee un parámetro de la URL y se inyecta con
-    // innerHTML. Al abrir admin.html?vista=<script>...</script> se ejecuta
+    // HTML din�mico. Al abrir admin.html?vista=<script>...</script> se ejecuta
     // código en el navegador del admin.
     var params = new URLSearchParams(window.location.search);
     var objetivo = params.get('vista');
     if (objetivo) {
-      $('#panel-bienvenida').innerHTML = 'Panel ' + objetivo;
+      $('#panel-bienvenida').textContent = 'Panel ' + objetivo;
     }
 
     $('#form-login').addEventListener('submit', iniciarSesion);
@@ -457,3 +639,4 @@
     init();
   }
 })();
+
