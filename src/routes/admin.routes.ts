@@ -56,6 +56,7 @@ type RolPermitido = (typeof ROLES_PERMITIDOS)[number];
 function esRolPermitido(valor: unknown): valor is RolPermitido {
   return typeof valor === 'string' && (ROLES_PERMITIDOS as readonly string[]).includes(valor);
 }
+const ADMIN_ROLES = ['admin'];
 
 router.put('/usuarios/:id',requiereRol('admin'), async (req, res, next) => {
   try {
@@ -64,7 +65,7 @@ router.put('/usuarios/:id',requiereRol('admin'), async (req, res, next) => {
     if (username !== undefined) cambios.username = username;
     if (nombre !== undefined) cambios.nombre = nombre;
     if (rol !== undefined) {
-      if (req.usuario?.rol !== 'admin') {
+      if (!ADMIN_ROLES.includes(req.usuario!.rol)) {
         return res.status(403).json({ error: 'No tienes permisos para cambiar el rol de este usuario.' });
       }
       if (!esRolPermitido(rol)) {
