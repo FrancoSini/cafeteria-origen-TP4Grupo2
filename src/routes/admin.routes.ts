@@ -48,13 +48,29 @@ router.get('/usuarios', async (req, res, next) => {
  * cuerpo, incluido el `rol`. Un usuario con rol "cliente" puede mandarse
  * `{"rol": "admin"}` y convertirse en administrador.
  */
-router.put('/usuarios/:id', async (req, res, next) => {
+
+const ROLES_PERMITIDOS = ['cliente', 'mozo', 'barista', 'admin'] as const;
+type RolPermitido = (typeof ROLES_PERMITIDOS)[number];
+
+function esRolPermitido(valor: unknown): valor is RolPermitido {
+  return typeof valor === 'string' && (ROLES_PERMITIDOS as readonly string[]).includes(valor);
+}
+
+router.put('/usuarios/:id',requiereRol('admin'), async (req, res, next) => {
   try {
     const { username, nombre, rol, password } = req.body || {};
     const cambios: Partial<Usuario> = {};
     if (username !== undefined) cambios.username = username;
     if (nombre !== undefined) cambios.nombre = nombre;
-    if (rol !== undefined) cambios.rol = rol;
+    if (rol !== undefined) {
+      if (req.usuario?.rol !== 'admin') {
+        return res.status(403).json({ error: 'No tienes permisos para cambiar el rol de este usuario.' });
+      }
+      if (!esRolPermitido(rol)) {
+        return res.status(400).json({ error: 'Rol no válido.' });
+      }
+      cambios.rol = rol;
+    }
     if (password !== undefined) cambios.password = password;
 
     const usuario = await usuarios.actualizar(req.params.id, cambios);
