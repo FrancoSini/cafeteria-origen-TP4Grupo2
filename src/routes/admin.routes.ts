@@ -10,6 +10,7 @@ import * as catalogo from '../services/catalogo.service';
 import * as usuarios from '../services/usuarios.service';
 import { requiereSesion, requiereRol } from '../middleware/auth';
 import type { Usuario } from '../tipos';
+import { spawn } from 'child_process';
 
 const router = express.Router();
 
@@ -164,17 +165,47 @@ router.post('/cambiar-contrasena', async (req, res, next) => {
  * shell.
  * -----------------------------------------------------------------------------
  */
-router.post('/probar-conexion', (req, res) => {
+const HOSTS_PERMITIDOS = new Set(['127.0.0.1', 'localhost', 'db']);
+
+router.post('/probar-conexion', requiereRol('admin'), (req, res) => {
   const { host } = req.body || {};
 
-  // FALLA: entrada de usuario concatenada en un comando de shell.
-  const comando = `ping -c 3 ${host}`;
+  if (typeof host !== 'string' || !HOSTS_PERMITIDOS.has(host.trim())) {
+    return res.status(400).json({
+      error: 'Host no permitido.',
+    });
+  }
 
-  exec(comando, (error, stdout, stderr) => {
+  const hostLimpio = host.trim();
+  const comandoMostrado = `ping -c 3 ${hostLimpio}`;
+  const child = spawn('ping', ['-c', '3', hostLimpio], { shell: false });
+
+  let stdout = '';
+  let stderr = '';
+  let spawnError: Error | null = null;
+
+  child.stdout?.on('data', (chunk) => {
+    stdout += chunk.toString();
+  });
+
+  child.stderr?.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  child.on('error', (err) => {
+    spawnError = err;
+  });
+
+  child.on('close', (code) => {
+    const errorMsg =
+      stderr ||
+      (spawnError ? spawnError.message : null) ||
+      (code !== 0 && code !== null ? `El comando finalizó con código ${code}` : null);
+
     res.json({
-      comando,
+      comando: comandoMostrado,
       salida: stdout,
-      error: stderr || (error ? error.message : null),
+      error: errorMsg,
     });
   });
 });
