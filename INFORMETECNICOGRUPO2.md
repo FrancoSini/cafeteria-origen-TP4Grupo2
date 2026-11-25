@@ -206,8 +206,23 @@ Uno de los principales aprendizajes fue comprender que la seguridad no debe agre
 También entendimos que no alcanza con corregir una falla de manera aislada. Es necesario comprobar que la solución funcione, que no afecte otras partes del sistema y que los distintos controles de seguridad se complementen.
 
 El trabajo en equipo fue otro aspecto positivo. La división de tareas nos permitió abordar diferentes vulnerabilidades, mientras que la integración de los cambios nos ayudó a mejorar la organización, la comunicación y el uso de herramientas de control de versiones.
+## 7. Reflexiones sobre las vulnerabilidades corregidas
 
-## 7. Conclusión
+**Inyección SQL:** Aprendimos que nunca debemos incorporar directamente los datos de los usuarios en las consultas SQL. En un proyecto real utilizaríamos siempre consultas parametrizadas para evitar que una entrada maliciosa modifique las instrucciones de la base de datos.
+
+**Cross-Site Scripting (XSS):** Comprendimos que mostrar información sin tratarla correctamente puede permitir la ejecución de código malicioso en el navegador. Por eso es importante utilizar métodos seguros para mostrar contenido y evitar interpretar como HTML los datos ingresados por los usuarios.
+
+**Cross-Site Request Forgery (CSRF):** Aprendimos que una aplicación debe verificar que las solicitudes que modifican información sean legítimas. En un proyecto real utilizaríamos tokens anti-CSRF, una configuración adecuada de las cookies y controles adicionales sobre el origen de las peticiones.
+
+**Validación de entradas y archivos:** Entendimos que no podemos confiar en los datos recibidos desde el navegador. Siempre debemos validar los valores, sus límites y los archivos que se cargan, especialmente desde el servidor.
+
+**Autenticación, sesiones y permisos:** Comprendimos la importancia de almacenar correctamente las contraseñas, proteger las sesiones y comprobar los permisos de cada usuario. En un sistema real también evitaríamos las credenciales predeterminadas y aplicaríamos controles para prevenir accesos no autorizados.
+
+**Inyección de comandos:** Aprendimos que ejecutar comandos del sistema utilizando datos enviados por usuarios puede representar un riesgo importante. En futuros proyectos evitaríamos estas prácticas y utilizaríamos funciones específicas que no permitan interpretar entradas como instrucciones.
+
+**Configuración de seguridad:** Entendimos que la seguridad también depende del entorno donde se ejecuta la aplicación. Utilizar variables de entorno, proteger los secretos, limitar privilegios y configurar correctamente los servicios son medidas necesarias para reducir riesgos.
+
+## 8. Conclusión
 
 Con el desarrollo del TP4 de Cafetería Origen logramos aplicar los conocimientos teóricos de ciberseguridad a una aplicación web de práctica.
 
