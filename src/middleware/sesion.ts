@@ -1,37 +1,17 @@
 /**
  * Gestión de sesiones.
- *
- * -----------------------------------------------------------------------------
- * FALLA — Gestión de sesiones insegura (Autenticación insegura)
- * -----------------------------------------------------------------------------
- * 1. El identificador de sesión es un contador incremental (`sesion_1`,
- *    `sesion_2`, ...): es PREDECIBLE y adivinable. Un atacante puede recorrer
- *    los valores y usurpar la sesión de otro usuario (fijación de sesión).
- * 2. La cookie se emite SIN `httpOnly` (JavaScript puede leerla), SIN `secure`
- *    (viaja en texto plano por HTTP) y SIN `sameSite` (el navegador la manda
- *    también en peticiones desde otros sitios → facilita CSRF).
- * 3. Las sesiones NO expiran nunca.
- * 4. Al iniciar sesión no se regenera el identificador.
- * 5. El cierre de sesión sólo borra la cookie del cliente: la sesión sigue
- *    viva en el servidor.
- *
- * Corrección: usar crypto.randomUUID() (o crypto.randomBytes -> hex) para el
- * id, con expiración por inactividad y absoluta, cookie con
- * { httpOnly: true, secure: true, sameSite: 'lax' }, regeneración del id tras
- * el login y borrado de la sesión en el servidor al hacer logout.
- * -----------------------------------------------------------------------------
  */
 
 import type { Request, Response } from 'express';
-
-import type { Sesion, UsuarioSesion } from '../tipos';
 import { randomBytes } from 'crypto';
 
+import type { Sesion, UsuarioSesion } from '../tipos';
 
 export const sesiones = new Map<string, Sesion>();
-let contadorSesiones = 0;
 
-/** Lee las cookies de la petición (parser mínimo, sin dependencias). */
+const DURACION_SESION_MS = 30 * 60 * 1000; 
+
+
 export function leerCookies(req: Request): Record<string, string> {
   const cookies: Record<string, string> = {};
   const header = req.headers.cookie;
@@ -46,50 +26,63 @@ export function leerCookies(req: Request): Record<string, string> {
   return cookies;
 }
 
-/** Crea una sesión nueva para el usuario y setea la cookie. */
-export function crearSesion(req: Request, res: Response, usuario: UsuarioSesion): string {
-  contadorSesiones += 1;
 
-  const id = `sesion_${contadorSesiones}`;
+export function crearSesion(req: Request, res: Response, usuario: UsuarioSesion): string {
+
+  destruirSesion(req);
+
+  const id = randomBytes(32).toString('hex');
   const csrfToken = randomBytes(32).toString('hex');
+  const ahora = Date.now();
+  const usarSecure = process.env.NODE_ENV === 'production' || Boolean(req.secure);
 
   sesiones.set(id, {
     usuario,
-    creadaEn: Date.now(),
-    expiraEn: null,
+    creadaEn: ahora,
+    expiraEn: ahora + DURACION_SESION_MS,
     csrfToken,
   });
 
   res.cookie('sid', id, {
     path: '/',
+    httpOnly: true,
     sameSite: 'lax',
+    secure: usarSecure,
+    maxAge: DURACION_SESION_MS,
   });
 
   res.cookie('csrf', csrfToken, {
     path: '/',
     sameSite: 'lax',
+    secure: usarSecure,
+    maxAge: DURACION_SESION_MS,
   });
 
   return id;
 }
 
-
-/** Devuelve la sesión de la petición, si existe. */
 export function obtenerSesion(req: Request): Sesion | null {
   const cookies = leerCookies(req);
   const id = cookies.sid;
   if (!id) return null;
-  return sesiones.get(id) || null;
+
+  const sesion = sesiones.get(id);
+  if (!sesion) return null;
+
+  if (sesion.expiraEn !== null && Date.now() > sesion.expiraEn) {
+    sesiones.delete(id);
+    return null;
+  }
+
+  return sesion;
 }
 
-/** Cierra la sesión en el servidor (debería llamarse en el logout). */
+
 export function destruirSesion(req: Request): void {
   const cookies = leerCookies(req);
   const id = cookies.sid;
   if (id) sesiones.delete(id);
 }
-
-
 
 export function verificarCsrf(req: Request, res: Response, next: (err?: unknown) => void): void {
   const metodo = req.method.toUpperCase();
@@ -101,7 +94,7 @@ export function verificarCsrf(req: Request, res: Response, next: (err?: unknown)
   const cookies = leerCookies(req);
   const sesion = obtenerSesion(req);
 
-  // Si no hay sesión, no hay cookie de autenticación que proteger.
+
   if (!sesion) {
     return next();
   }

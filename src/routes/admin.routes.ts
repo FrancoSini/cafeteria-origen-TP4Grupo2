@@ -31,7 +31,9 @@ const router = express.Router();
  * Corrección: `router.use(requiereRol('admin'))` sobre las rutas sensibles.
  * -----------------------------------------------------------------------------
  */
+
 router.use(requiereSesion);
+router.use(requiereRol('admin'));
 
 /** GET /api/admin/usuarios */
 router.get('/usuarios', async (req, res, next) => {

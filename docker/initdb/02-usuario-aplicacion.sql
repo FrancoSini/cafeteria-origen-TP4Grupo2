@@ -15,7 +15,7 @@
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'origen_app') THEN
-        CREATE ROLE origen_app LOGIN PASSWORD 'origen_app_2024';
+        CREATE ROLE origen_app LOGIN PASSWORD 'OrigenSegura2026!';
     END IF;
 END
 $$;
