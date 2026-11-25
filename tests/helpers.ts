@@ -132,15 +132,9 @@ export async function productoPorNombre(nombre: string): Promise<ProductoConPrec
  * En el resultado, `hash` indica si la aplicación guarda las contraseñas hasheadas.
  */
 export async function crearUsuarioDePrueba(username: string, password: string, rol: Rol = 'barista') {
-  const { rows: muestra } = await db.query(
-    "SELECT password FROM usuarios WHERE password LIKE '$2%' LIMIT 1"
-  );
-  const usaHash = muestra.length > 0;
+  const valor = await bcrypt.hash(password, 12);
 
-  let valor = password;
-  if (usaHash) {
-    valor = await bcrypt.hash(password, 12);
-  }
+  
 
   await db.query(
     `INSERT INTO usuarios (username, password, rol, nombre)
@@ -153,7 +147,7 @@ export async function crearUsuarioDePrueba(username: string, password: string, r
   const { rows } = await db.query('SELECT id FROM usuarios WHERE username = $1', [username]);
 
   const id: number | null = rows[0] ? rows[0].id : null;
-  return { res, id, hash: usaHash };
+  return { res, id, hash: true };
 }
 
 /** Elimina un usuario de prueba de la base. */

@@ -1,5 +1,6 @@
 import express from 'express';
 import * as catalogo from '../services/catalogo.service';
+import { validarId } from '../validacion';
 import type { FiltrosCatalogo } from '../services/catalogo.service';
 
 const router = express.Router();
@@ -49,18 +50,28 @@ router.get('/variedades', async (req, res, next) => {
  * FALLA — Inyección SQL en el id (el id se mete en la consulta entre comillas).
  * FALLA — XSS reflejado: el mensaje de error incluye el id recibido.
  */
-router.get('/:id', async (req, res, next) => {
-  try {
-    const producto = await catalogo.obtener(req.params.id);
-    if (!producto) {
-      return res
-        .status(404)
-        .json({ error: `No existe el producto "${req.params.id}".` });
+  router.get('/:id', async (req, res, next) => {
+    try {
+      const id = validarId(req.params.id);
+
+      if (id === null) {
+        return res.status(400).json({
+          error: 'El identificador del producto no es válido.'
+        });
+      }
+
+      const producto = await catalogo.obtener(String(id));
+
+      if (!producto) {
+        return res.status(404).json({
+          error: 'Producto no encontrado.'
+        });
+      }
+
+      res.json(producto);
+    } catch (err) {
+      next(err);
     }
-    res.json(producto);
-  } catch (err) {
-    next(err);
-  }
 });
 
 export default router;

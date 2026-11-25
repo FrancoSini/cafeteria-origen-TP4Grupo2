@@ -59,11 +59,7 @@
     }
   }
 
-  function escaparHtml(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto == null ? '' : String(texto);
-    return div.innerHTML;
-  }
+  
 
   /* ------------------------------------------------------------- catálogo */
   function urlCatalogo() {
@@ -86,56 +82,164 @@
     });
   }
 
-  function renderProductos(productos) {
+  
+function renderProductos(productos) {
+  var grid = $('#productos-grid');
+
+  // Limpiamos el catálogo de forma segura
+  grid.replaceChildren();
+
+  if (!productos || productos.length === 0) {
+    var vacio = document.createElement('p');
+    vacio.className = 'empty';
+    vacio.textContent = 'No encontramos productos con esos filtros.';
+    grid.appendChild(vacio);
+    return;
+  }
+
+  productos.forEach(function (p) {
+    window.__productos[p.id] = p;
+
+    // Tarjeta del producto
+    var articulo = document.createElement('article');
+    articulo.className = 'product-card';
+
+    // Parte superior: nombre y precio
+    var superior = document.createElement('div');
+    superior.className = 'product-top';
+
+    var nombre = document.createElement('h3');
+    nombre.className = 'product-name';
+    nombre.textContent = p.nombre || '';
+
+    var precio = document.createElement('span');
+    precio.className = 'product-price';
+    precio.textContent = money(p.precio);
+
+    superior.appendChild(nombre);
+    superior.appendChild(precio);
+
+    // Etiquetas: tipo, variedad y tamaño
+    var etiquetas = document.createElement('div');
+    etiquetas.className = 'product-tags';
+
+    function agregarEtiqueta(valor, clase) {
+      if (!valor) return;
+
+      var etiqueta = document.createElement('span');
+      etiqueta.className = clase;
+      etiqueta.textContent = String(valor);
+      etiquetas.appendChild(etiqueta);
+    }
+
+    agregarEtiqueta(p.tipo, 'tag');
+    agregarEtiqueta(p.variedad, 'tag tag-origen');
+    agregarEtiqueta(p.tamano, 'tag');
+
+    // Descripción del producto
+    var descripcion = document.createElement('p');
+    descripcion.className = 'product-desc';
+    descripcion.textContent = p.descripcion || '';
+
+    // Botón para agregar al carrito
+    var boton = document.createElement('button');
+    boton.type = 'button';
+    boton.className = 'btn btn-ghost btn-agregar';
+    boton.textContent = 'Agregar';
+    boton.setAttribute('data-id', String(p.id));
+
+    // Armamos la tarjeta
+    articulo.appendChild(superior);
+    articulo.appendChild(etiquetas);
+    articulo.appendChild(descripcion);
+    articulo.appendChild(boton);
+
+    // Agregamos el producto al catálogo
+    grid.appendChild(articulo);
+  });
+}
+
+
+  
+  
+function renderProductos(productos) {
+  var grid = $('#productos-grid');
+  grid.replaceChildren();
+
+  if (!productos || productos.length === 0) {
+    var vacio = document.createElement('p');
+    vacio.className = 'empty';
+    vacio.textContent = 'No encontramos productos con esos filtros.';
+    grid.appendChild(vacio);
+    return;
+  }
+
+  productos.forEach(function (p) {
+    window.__productos[p.id] = p;
+
+    var articulo = document.createElement('article');
+    articulo.className = 'product-card';
+
+    var superior = document.createElement('div');
+    superior.className = 'product-top';
+
+    var nombre = document.createElement('h3');
+    nombre.className = 'product-name';
+    nombre.textContent = p.nombre || '';
+
+    var precio = document.createElement('span');
+    precio.className = 'product-price';
+    precio.textContent = money(p.precio);
+
+    superior.appendChild(nombre);
+    superior.appendChild(precio);
+
+    var etiquetas = document.createElement('div');
+    etiquetas.className = 'product-tags';
+
+    function agregarEtiqueta(valor, clase) {
+      if (!valor) return;
+
+      var etiqueta = document.createElement('span');
+      etiqueta.className = clase;
+      etiqueta.textContent = String(valor);
+      etiquetas.appendChild(etiqueta);
+    }
+
+    agregarEtiqueta(p.tipo, 'tag');
+    agregarEtiqueta(p.variedad, 'tag tag-origen');
+    agregarEtiqueta(p.tamano, 'tag');
+
+    var descripcion = document.createElement('p');
+    descripcion.className = 'product-desc';
+    descripcion.textContent = p.descripcion || '';
+
+    var boton = document.createElement('button');
+    boton.className = 'btn btn-ghost btn-agregar';
+    boton.textContent = 'Agregar';
+    boton.setAttribute('data-id', String(p.id));
+
+    articulo.appendChild(superior);
+    articulo.appendChild(etiquetas);
+    articulo.appendChild(descripcion);
+    articulo.appendChild(boton);
+
+    grid.appendChild(articulo);
+  });
+}
+  
+  function renderErrorProductos(mensaje) {
     var grid = $('#productos-grid');
 
-    if (!productos || productos.length === 0) {
-      grid.innerHTML = '<p class="empty">No encontramos productos con esos filtros.</p>';
-      return;
-    }
+    var error = document.createElement('p');
+    error.className = 'empty';
+    error.textContent =
+      'No se pudo cargar el menú: ' +
+      (mensaje || 'error desconocido');
 
-    // ---------------------------------------------------------------
-    // FALLA (XSS reflejado / almacenado): el HTML se construye con
-    // innerHTML a partir de datos que vienen del servidor (nombres de
-    // producto y texto de la búsqueda). Un "<script>" en el buscador o
-    // en el nombre de un producto se ejecuta en el navegador.
-    //
-    // Corrección: usar textContent, o escapar los valores antes de
-    // interpolarlos (ver la función escaparHtml de arriba).
-    // ---------------------------------------------------------------
-    grid.innerHTML = productos.map(function (p) {
-      window.__productos[p.id] = p;
-      var tags = '<span class="tag">' + raw(p.tipo) + '</span>';
-      if (p.variedad) tags += '<span class="tag tag-origen">' + raw(p.variedad) + '</span>';
-      if (p.tamano) tags += '<span class="tag">' + raw(p.tamano) + '</span>';
-
-      return '' +
-        '<article class="product-card">' +
-        '  <div class="product-top">' +
-        '    <h3 class="product-name">' + raw(p.nombre) + '</h3>' +
-        '    <span class="product-price">' + money(p.precio) + '</span>' +
-        '  </div>' +
-        '  <div class="product-tags">' + tags + '</div>' +
-        '  <p class="product-desc">' + raw(p.descripcion) + '</p>' +
-        '  <button class="btn btn-ghost btn-agregar" data-id="' + raw(p.id) + '">Agregar</button>' +
-        '</article>';
-    }).join('');
+    grid.replaceChildren(error);
   }
 
-  function renderResultado(filtros, total) {
-    var el = $('#resultado-busqueda');
-
-    // FALLA (XSS reflejado): se interpola el texto buscado con innerHTML.
-    if (filtros && filtros.q) {
-      el.innerHTML = 'Resultados para <strong>' + filtros.q + '</strong> — ' + total + ' producto(s)';
-    } else {
-      el.textContent = total + ' producto(s) en el menú';
-    }
-  }
-
-  function renderErrorProductos(mensaje) {
-    $('#productos-grid').innerHTML = '<p class="empty">No se pudo cargar el menú: ' + (mensaje || 'error desconocido') + '</p>';
-  }
 
   /* --------------------------------------------------------------- carrito */
   function agregarAlCarrito(productoId) {
@@ -172,46 +276,98 @@
     renderCarrito();
   }
 
-  function renderCarrito() {
-    var cont = $('#carrito');
-    var lista = $('#resumen-carrito');
-    var total = 0;
+  
+function renderCarrito() {
+  var cont = $('#carrito');
+  var lista = $('#resumen-carrito');
+  var total = 0;
 
-    if (estado.carrito.length === 0) {
-      cont.innerHTML = '<p class="empty">El carrito está vacío.</p>';
-      lista.innerHTML = '';
-      $('#resumen-total').textContent = money(0);
-      return;
+  cont.replaceChildren();
+  lista.replaceChildren();
+
+  if (estado.carrito.length === 0) {
+    var vacio = document.createElement('p');
+    vacio.className = 'empty';
+    vacio.textContent = 'El carrito está vacío.';
+    cont.appendChild(vacio);
+    $('#resumen-total').textContent = money(0);
+    return;
+  }
+
+  estado.carrito.forEach(function (item, i) {
+    var subtotal = item.precio * item.cantidad;
+    total += subtotal;
+
+    var fila = document.createElement('div');
+    fila.className = 'cart-item';
+
+    var info = document.createElement('div');
+
+    var nombre = document.createElement('div');
+    nombre.className = 'cart-item-name';
+    nombre.textContent = item.nombre;
+
+    var precio = document.createElement('div');
+    precio.className = 'cart-item-meta';
+    precio.textContent = money(item.precio) + ' c/u';
+
+    info.appendChild(nombre);
+    info.appendChild(precio);
+
+    var controles = document.createElement('div');
+    controles.className = 'qty-control';
+
+    function crearBoton(texto, accion) {
+      var boton = document.createElement('button');
+      boton.type = 'button';
+      boton.textContent = texto;
+      boton.setAttribute('data-acc', accion);
+      boton.setAttribute('data-i', String(i));
+      return boton;
     }
 
-    cont.innerHTML = estado.carrito.map(function (item, i) {
-      var subtotal = item.precio * item.cantidad;
-      total += subtotal;
-      return '' +
-        '<div class="cart-item">' +
-        '  <div>' +
-        '    <div class="cart-item-name">' + raw(item.nombre) + '</div>' +
-        '    <div class="cart-item-meta">' + money(item.precio) + ' c/u</div>' +
-        '  </div>' +
-        '  <div class="qty-control">' +
-        '    <button type="button" data-acc="menos" data-i="' + i + '">&minus;</button>' +
-        '    <span>' + item.cantidad + '</span>' +
-        '    <button type="button" data-acc="mas" data-i="' + i + '">+</button>' +
-        '  </div>' +
-        '  <div>' +
-        '    <div class="cart-item-price">' + money(subtotal) + '</div>' +
-        '    <button type="button" class="link-danger" data-acc="quitar" data-i="' + i + '">Quitar</button>' +
-        '  </div>' +
-        '</div>';
-    }).join('');
+    var menos = crearBoton('−', 'menos');
+    var cantidad = document.createElement('span');
+    cantidad.textContent = String(item.cantidad);
+    var mas = crearBoton('+', 'mas');
 
-    lista.innerHTML = estado.carrito.map(function (item) {
-      return '<li><span>' + raw(item.nombre) + ' × ' + item.cantidad + '</span><span>' +
-        money(item.precio * item.cantidad) + '</span></li>';
-    }).join('');
+    controles.appendChild(menos);
+    controles.appendChild(cantidad);
+    controles.appendChild(mas);
 
-    $('#resumen-total').textContent = money(total);
-  }
+    var acciones = document.createElement('div');
+
+    var precioTotal = document.createElement('div');
+    precioTotal.className = 'cart-item-price';
+    precioTotal.textContent = money(subtotal);
+
+    var quitar = crearBoton('Quitar', 'quitar');
+    quitar.className = 'link-danger';
+
+    acciones.appendChild(precioTotal);
+    acciones.appendChild(quitar);
+
+    fila.appendChild(info);
+    fila.appendChild(controles);
+    fila.appendChild(acciones);
+
+    cont.appendChild(fila);
+
+    var elementoResumen = document.createElement('li');
+    var detalle = document.createElement('span');
+    detalle.textContent = item.nombre + ' × ' + item.cantidad;
+
+    var importe = document.createElement('span');
+    importe.textContent = money(subtotal);
+
+    elementoResumen.appendChild(detalle);
+    elementoResumen.appendChild(importe);
+    lista.appendChild(elementoResumen);
+  });
+
+  $('#resumen-total').textContent = money(total);
+}
+
 
   /* ---------------------------------------------------------------- pedidos */
   function enviarPedido(evento) {
@@ -230,7 +386,7 @@
       if (!resp.ok) {
         // FALLA (XSS reflejado): el mensaje del servidor se pinta con innerHTML.
         feedback.className = 'form-feedback is-error';
-        feedback.innerHTML = 'No pudimos enviar el pedido: ' + (resp.data.error || 'error desconocido');
+        feedback.textContent = 'No pudimos enviar el pedido: ' + (resp.data.error || 'error desconocido');
         return;
       }
       feedback.className = 'form-feedback is-ok';
@@ -247,30 +403,56 @@
   }
 
   /* --------------------------------------------------------------- reseñas */
-  function cargarReseñas() {
-    return api('/comentarios').then(function (resp) {
-      var cont = $('#lista-resenas');
-      if (!resp.ok || !resp.data.comentarios || resp.data.comentarios.length === 0) {
-        cont.innerHTML = '<p class="empty">Todavía no hay reseñas. ¡Sé el primero!</p>';
-        return;
-      }
-      // FALLA (XSS almacenado): el texto de la reseña viene de la base y se
-      // inyecta con innerHTML → se ejecuta en el navegador de cada visitante.
-      cont.innerHTML = resp.data.comentarios.map(function (c) {
-        var estrellas = '';
-        var i;
-        for (i = 0; i < Number(c.calificacion || 0); i++) estrellas += '★';
-        return '' +
-          '<article class="review">' +
-          '  <div class="review-head">' +
-          '    <span class="review-author">' + raw(c.autor) + '</span>' +
-          '    <span class="review-stars">' + estrellas + '</span>' +
-          '  </div>' +
-          '  <p class="review-text">' + raw(c.texto) + '</p>' +
-          '</article>';
-      }).join('');
+  
+function cargarReseñas() {
+  return api('/comentarios').then(function (resp) {
+    var cont = $('#lista-resenas');
+
+    if (!resp.ok || !resp.data.comentarios ||
+        resp.data.comentarios.length === 0) {
+      var vacio = document.createElement('p');
+      vacio.className = 'empty';
+      vacio.textContent = 'Todavía no hay reseñas. ¡Sé el primero!';
+      cont.replaceChildren(vacio);
+      return;
+    }
+
+    cont.replaceChildren();
+
+    resp.data.comentarios.forEach(function (c) {
+      var articulo = document.createElement('article');
+      articulo.className = 'review';
+
+      var cabecera = document.createElement('div');
+      cabecera.className = 'review-head';
+
+      var autor = document.createElement('span');
+      autor.className = 'review-author';
+      autor.textContent = c.autor || '';
+
+      var estrellas = document.createElement('span');
+      estrellas.className = 'review-stars';
+
+      var cantidad = Number(c.calificacion || 0);
+      estrellas.textContent = '★'.repeat(
+        Math.max(0, Math.min(5, cantidad))
+      );
+
+      var texto = document.createElement('p');
+      texto.className = 'review-text';
+      texto.textContent = c.texto || '';
+
+      cabecera.appendChild(autor);
+      cabecera.appendChild(estrellas);
+
+      articulo.appendChild(cabecera);
+      articulo.appendChild(texto);
+
+      cont.appendChild(articulo);
     });
-  }
+  });
+}
+
 
   function enviarReseña(evento) {
     evento.preventDefault();
@@ -285,7 +467,7 @@
     }).then(function (resp) {
       if (!resp.ok) {
         feedback.className = 'form-feedback is-error';
-        feedback.innerHTML = 'No se pudo publicar: ' + (resp.data.error || 'error desconocido');
+        feedback.textContent = 'No se pudo publicar: ' + (resp.data.error || 'error desconocido');
         return;
       }
       feedback.className = 'form-feedback is-ok';

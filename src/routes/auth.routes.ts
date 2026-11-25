@@ -2,7 +2,23 @@ import express from 'express';
 import * as usuarios from '../services/usuarios.service';
 import { crearSesion, destruirSesion, obtenerSesion } from '../middleware/sesion';
 
+import rateLimit from 'express-rate-limit';
+
+
 const router = express.Router();
+
+
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: {
+    error: 'Demasiados intentos de inicio de sesión. Intentá nuevamente más tarde.',
+  },
+});
 
 /**
  * Inicio de sesión.
@@ -15,7 +31,7 @@ const router = express.Router();
  *  - Sin rate limiting ni bloqueo: fuerza bruta ilimitada.
  *  - El identificador de sesión no se regenera (fijación de sesión).
  */
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const { username, password } = req.body || {};
 
@@ -27,18 +43,12 @@ router.post('/login', async (req, res, next) => {
     const usuario = await usuarios.autenticar(username, password);
 
     if (!usuario) {
-      // FALLA — Enumeración de usuarios: el mensaje distingue entre
-      // "no existe" y "contraseña incorrecta", lo que permite a un atacante
-      // averiguar qué cuentas hay en el sistema.
-      const existe = await usuarios.buscarPorUsername(username);
-      if (existe) {
-        return res.status(401).json({ error: 'La contraseña es incorrecta.' });
-      }
-      return res
-        .status(401)
-        .json({ error: `El usuario "${username}" no existe en el sistema.` });
+      
+      return res.status(401).json({
+        error: 'Credenciales invalidas.',
+      });
     }
-
+    
     crearSesion(req, res, {
       id: usuario.id,
       username: usuario.username,
@@ -60,14 +70,10 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-/**
- * Cierre de sesión.
- *
- * FALLA: sólo borra la cookie del navegador. La sesión sigue existiendo en el
- * servidor, así que con la cookie robada se puede seguir usando.
- */
 router.post('/logout', (req, res) => {
+  destruirSesion(req);
   res.clearCookie('sid', { path: '/' });
+  res.clearCookie('csrf', { path: '/' });
   res.json({ mensaje: 'Sesión cerrada.' });
 });
 
@@ -78,6 +84,19 @@ router.get('/yo', (req, res) => {
     return res.status(401).json({ error: 'Necesitás iniciar sesión.' });
   }
   res.json({ usuario: sesion.usuario });
+});
+
+
+
+
+router.get('/csrf-token', (req, res) => {
+  const sesion = obtenerSesion(req);
+
+  if (!sesion) {
+    return res.status(401).json({ error: 'Necesitás iniciar sesión.' });
+  }
+
+  res.json({ token: sesion.csrfToken });
 });
 
 export default router;

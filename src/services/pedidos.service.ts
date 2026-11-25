@@ -1,6 +1,18 @@
 import * as db from '../db';
 import { calcularPrecio } from '../catalogo';
-import type { Pedido, PedidoConItems, PedidoItem, Producto } from '../tipos';
+
+import type { ErrorHttp, Pedido, PedidoConItems, PedidoItem, Producto } from '../tipos';
+
+
+
+
+// Crea errores de validación que la API responde con estado 400.
+function errorValidacion(mensaje: string): ErrorHttp {
+  const error = new Error(mensaje) as ErrorHttp;
+  error.status = 400;
+  return error;
+}
+
 
 /** Un renglón del pedido, tal como llega en el cuerpo de la petición. */
 export interface ItemPedido {
@@ -40,17 +52,55 @@ type Id = number | string;
  * Crea un pedido a partir de una lista de items { productoId, cantidad }.
  * Total = suma de calcularPrecio(producto) x cantidad
  */
-export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<PedidoConItems | null> {
-  // FALLA: no se valida que items exista, sea un array, ni que cada cantidad
-  // sea un entero positivo. Los tipos de `NuevoPedido` NO alcanzan: el cuerpo
-  // de la petición llega como `any` y en ejecución puede traer cualquier cosa.
+  export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<PedidoConItems | null> {
+  // Se valida que la mesa sea un texto válido y no supere los 20 caracteres.
+  if (
+    typeof mesa !== 'string' ||
+    mesa.trim().length === 0 ||
+    mesa.length > 20
+  ) {
+    throw errorValidacion('La mesa debe ser un texto válido de hasta 20 caracteres.');
+  }
+
+  // Se valida que el cliente sea un texto válido y no supere los 100 caracteres.
+  if (
+    typeof cliente !== 'string' ||
+    cliente.trim().length === 0 ||
+    cliente.length > 100
+  ) {
+    throw errorValidacion('El cliente debe ser un texto válido de hasta 100 caracteres.');
+  }
+
+  // Se valida que items exista, sea un array y contenga entre 1 y 20 productos.
+  if (!Array.isArray(items) || items.length === 0 || items.length > 20) {
+    throw errorValidacion('El pedido debe contener entre 1 y 20 productos.');
+  }
+
   const filas: { productoId: number; cantidad: number; precioUnitario: number }[] = [];
 
   for (const item of items) {
-    // Si el producto no existe, buscarProducto devuelve null y `precio`
-    // revienta con un TypeError cuyo stack se filtra al cliente.
+    // Se valida que el productoId sea un entero positivo y la cantidad
+    // un entero entre 1 y 100.
+    if (
+      !item ||
+      !Number.isInteger(item.productoId) ||
+      item.productoId <= 0 ||
+      !Number.isInteger(item.cantidad) ||
+      item.cantidad < 1 ||
+      item.cantidad > 100
+    ) {
+      throw errorValidacion('El producto y la cantidad del pedido no son válidos.');
+    }
+
+    // Si el producto no existe, se rechaza el pedido antes de calcular el precio.
     const producto = await buscarProducto(item.productoId);
+
+    if (!producto) {
+      throw errorValidacion('El producto solicitado no existe.');
+    }
+
     const precioUnitario = calcularPrecio(producto);
+
     filas.push({
       productoId: producto.id,
       cantidad: item.cantidad,
@@ -67,8 +117,9 @@ export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<Pedi
     `INSERT INTO pedidos (mesa, cliente, estado, total)
      VALUES ($1, $2, 'abierto', $3)
      RETURNING *`,
-    [mesa, cliente, total]
+    [mesa.trim(), cliente.trim(), total]
   );
+
   const pedido = rows[0];
 
   for (const fila of filas) {
@@ -82,6 +133,7 @@ export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<Pedi
   return obtenerConItems(pedido.id);
 }
 
+
 /** Busca un producto por id (helper interno). */
 async function buscarProducto(productoId: number): Promise<Producto> {
   const { rows } = await db.query<Producto>('SELECT * FROM productos WHERE id = $1', [productoId]);
@@ -89,15 +141,24 @@ async function buscarProducto(productoId: number): Promise<Producto> {
 }
 
 /** Lista pedidos (con filtro opcional por mesa). */
+
 export async function listar(mesa?: string): Promise<Pedido[]> {
-  // FALLA: inyección SQL en el filtro de mesa.
+
   let sql = 'SELECT * FROM pedidos';
-  if (mesa) sql += ` WHERE mesa = '${mesa}'`;
+  const valores: string[] = [];
+
+  if (mesa) {
+    sql += ' WHERE mesa = $1';
+    valores.push(mesa);
+  }
+
   sql += ' ORDER BY id DESC';
 
-  const { rows } = await db.query<Pedido>(sql);
+  const { rows } = await db.query<Pedido>(sql, valores);
+
   return rows;
 }
+
 
 /** Devuelve un pedido con sus items. */
 export async function obtenerConItems(id: Id): Promise<PedidoConItems | null> {
