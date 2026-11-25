@@ -1,4 +1,15 @@
 import path from 'path';
+function obtenerVariableObligatoria(nombre: string): string {
+  const valor = process.env[nombre];
+
+  if (!valor || !valor.trim()) {
+    throw new Error(
+      `Falta configurar la variable de entorno: ${nombre}`
+    );
+  }
+
+  return valor;
+}
 
 /**
  * Configuración de la aplicación.
@@ -24,13 +35,13 @@ export default {
     // FALLA: la aplicación se conecta con el superusuario de la base de datos
     // (mínimos privilegios). Existe un usuario `origen_app` con permisos
     // reducidos para usar como corrección.
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
+    user: process.env.DB_USER || 'origen_app',
+    password: obtenerVariableObligatoria('DB_PASSWORD'),
   },
 
   // FALLA: secreto fijo y predecible, escrito en el código.
   // Se necesita para firmar el token anti-CSRF (corrección del CSRF).
-  sessionSecret: 'origen-cafe-2024',
+  sessionSecret: obtenerVariableObligatoria('SESSION_SECRET'),
 
   // FALLA: credenciales por defecto que nunca se cambian.
   credencialesPorDefecto: {
